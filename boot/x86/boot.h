@@ -14,6 +14,49 @@
 #define BOOTDIR_MAX_ENTRIES     64
 #define BOOTDIR_DIRECTORY       "SBBB/Directory"
 
+#define MBI_MEM               0x00000001
+#define MBI_BOOTDEV           0x00000002
+#define MBI_CMDLINE           0x00000004
+#define MBI_MODS              0x00000008
+#define MBI_SYMS_AOUT         0x00000010
+#define MBI_SYMS_ELF          0x00000020
+#define MBI_MMAP              0x00000040
+
+typedef struct {
+	unsigned int flags, mem_lower, mem_upper, boot_device;
+	char *cmdline;
+	unsigned int mods_count, mods_addr;
+	union {
+		struct {
+			unsigned int tabsize, strsize, addr, _pad_;
+		} sym_aout;
+		struct {
+			unsigned int num, size, addr, shndx;
+		} sym_elf;
+	} mb_sym_un;
+	unsigned int mmap_length, mmap_addr;
+} multiboot_info;
+
+typedef struct {
+	int	offset;					/* offset of file relative to the start of image */
+	int	size;					/* size of file */
+	int	mode : 16;				/* mode in usual unix manner */
+	int flags : 8;				/* flags */
+	int namelen : 8;			/* length of name string */
+} ifs_inode;					/* name follows the inode immediately */
+
+#define IFS_MAGIC		0x38de7a19
+
+typedef struct {
+	int jump;					/* just a short jump to the real code start */
+	unsigned int magic;			/* magic number */
+	int flags;					/* currently unused */
+	int reserved;				/* currently unused */
+	char name[16];				/* name of image */
+	ifs_inode *root;			/* root directory entry */
+	multiboot_info *minfo;		/* multiboot info */
+} ifs_superblock;
+
 typedef struct {
     char name[BOOTDIR_NAMELEN]; /* name of loaded object, zero terminated */
     int  offset;   /* offset of object relative to the start of boot_dir  */

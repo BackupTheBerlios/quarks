@@ -8,7 +8,6 @@
 
 */
 #include <quarks/types.h>
-#include "multiboot.h"
 #include "boot.h"
 #include <x86/console.h>
 

@@ -7,7 +7,7 @@
    it without license.
 
 */
-#include "boot.h"
+#include "../boot/x86/boot.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -307,6 +307,57 @@ arg *get_nextarg(arg *a)
 	return a->next;
 }
 
+ifs_dir *new_ifs_dir(char *name, int len)
+{
+	ifs_dir *dir;
+
+	dir = calloc(sizeof(ifs_dir));
+
+	strndup(dir->name, name);
+	dir->flags = IFS_DIR;
+	return dir;
+}
+
+ifs_dir *build_directory(section *image, char *bootfile, char *outfile)
+{
+	command *c;
+	arg *a;
+	ifs_dir *root = 0;
+	char buf[1024];
+
+	fprintf(stderr, "Building image\n");
+
+	for(c = image->firstc; c; c = c->next) {
+		if (c->nlen == 3 && !strncmp("dir", c->name, 3)) {
+			if (!(a = get_arg(c))) {
+				die("argument missing for command >dir\n", NULL);
+			}
+			strncpy(buf, a->name, a->nlen);
+			buf[a->nlen] = 0;
+			fprintf(stderr, "adding directory %s\n", buf);
+
+			if (!root)
+				root = new_ifs_dir(buf);
+			else
+				insert_dir(root, buf);
+
+			for(a = get_nextarg(a); a; a = get_nextarg(a)) {
+
+				strncpy(buf, a->name, a->nlen);
+				buf[a->nlen] = 0;
+				printf("adding file %s\n", filename);
+
+				insert_file(root, filename);
+			}
+		} else {
+			strncpy(buf, c->name, c->nlen);
+			buf[c->nlen] = 0;
+			fprintf(stderr, "unknown command %s, ignoring\n", buf);
+		}
+	}
+	return root;
+}
+
 void mkifs(section *sections, char *outfile)
 {
 	FILE *fp;
@@ -325,7 +376,7 @@ void mkifs(section *sections, char *outfile)
 		die("Please specify a >boot command in the [Startup] section\n", NULL);
 	}
 	if (!(a = get_arg(c))) {
-		die("argument missing for command <boot\n", NULL);
+		die("argument missing for command >boot\n", NULL);
 	}
 	strncpy(bootstrap, a->name, a->nlen);
 	bootstrap[a->nlen] = 0;
@@ -334,17 +385,16 @@ void mkifs(section *sections, char *outfile)
 	/* print_sections(sections); */
 
 
-/*	if(!(fp = fopen(outfile,"wb"))){
+	/*if(!(fp = fopen(outfile,"wb"))){
 		die("cannot write to \"%s\"", outfile);
 	}*/
 
-	fprintf(stderr, "writing directory\n");
-/*	fwrite(bdir, sizeof(bdir), 1, fp);
+	if (!(s = find_section(sections, "Image"))) {
+		die("No Image section found\n", NULL);
+	}
 
-	for (i = 0; i < c; i ++) {
-		fprintf(stderr, "writing file %i\n");
-		fwrite(rawdata[i], rawsize[i], 1, fp);
-	}*/
+	build_directory(s, bootstrap, outfile);
+	fprintf(stderr, "writing image\n");
 	fprintf(stderr, "done\n");
 /*	fclose(fp);*/
 }
