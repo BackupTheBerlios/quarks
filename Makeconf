@@ -1,0 +1,15 @@
+
+arch		= x86
+
+CC		= gcc
+CXX		= gcc
+LD		= ld
+AR		= ar
+RM		= rm -f
+RMDIR	= rmdir
+MKDIR	= mkdir
+AWK		= awk
+YACC		= yacc
+
+XRES		= xres
+MIMESET	= mimeset

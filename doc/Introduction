@@ -1,0 +1,69 @@
+
+Welcome to Quarks.
+
+	Quarks is an experimental operating system suite that tries to merge all the good things of currently available commercial operating systems and research ideas into one. Quarks consists of a highly flexible microkernel, a couple of resource managers and some higher level OS services. Together they build the 'trusted computing base'. Quarks was inspired by the L4 microkernel, BeOS, the QNX real time platform, VSTa, OpenBLT and a few others.
+
+1. The microkernel
+
+	The kernel provides a few very flexible system mechanisms much like the L4 microkernel. It is more like an idealized processor, the 'glue all in between' than a kernel. The kernel features fast message passing via ports, a chief/clan concept and fully memory-protected process management.
+
+1.1 Flexpages
+
+	Like L4 steam follows the flexpage concept. A flexpage is a set of memory pages and system calls work on flexpages as the smallest unit of memory. Flexpages can be either granted, mapped or flushed. Granted means, the page changes it's ownership to the grantee, the original owner may no longer access this page. Mapped means both (or more) processes involved may access the page but the mappee agrees that the page can be flushed off it's adress space at every time the mapper wants to. This is very useful to implement memory managers that can provide otherwise unused memory as dynamically resizeable cache and allows for highly flexible OS design, scaling from small embedded devices to huge multiprocessor clusters for e.g. database servers, high speed shared memory media streaming and the like. 
+	I/O ports on the Intel x86 processor family are treated as flexpages too, with a granularity of a couple 8-bit ports. There is no distinction between memory pages and I/O ports from syscall sight. You just ask the kernel to grant you the I/O pages you need and it (on x86) sets the IO permission map to only those ports. This way the kernel can keep track that only one instance gets a specific range of ports. Access to any other port causes an exception. This abstraction reflects the fact that separate I/O ports exist only on x86 while on other platforms I/O ports of peripheral devices are indeed mapped into special memory regions. In practice all the I/O ports and memory regions potentially used by peripheral devices are acquired during boottime by one or more resource managers to which tasks send then requests if they need access to specific resources. Those resource managers can then map or grant the desired resources into the requesting task's adress space. The resource managers are also responsible for implementing the system's security policies.
+
+1.2 IRQ's
+
+	IRQ's are delivered as inter process messages, like in L4 or QNX's Neutrino.
+
+1.3 Teams and Threads
+
+	A team is a set of threads running in the same adress space. They share all the team's resources. A thread runs at a dedicated priority which has impact on how it is scheduled. Priorities from 128 to 255 mark a thread as hard realtime thread, priorities from 0 to 127 mark it as soft realtime. Soft realtime threads get scheduled only when no more hard realtime threads are in the ready-queue and can be interrupted at any time. Hard realtime threads get interrupted only from hard realtime threads with a higher priority.
+
+1.4 Chiefs and Clans
+
+	A clan is a couple of teams and one of them is the chief of the clan. All IPC that crosses clan boundaries, is delivered to the chief first. Very useful for watching suspicious processes, or just to implement IPC transparently over a network. It can also be used to selectively run soft realtime threads with paging as usual, but hard realtime threads without.
+
+1.5 Exceptions
+
+	Most processor exceptions are IPC's, for example the page fault exception. This allows to implement a user level pager which can page out to disk, file, network or whatever you like and can be started and stopped whenever you like. 
+
+1.6 Security
+
+	The security management (e.g. checking for root rights) is actually done at a higher level in user space and allows for completely different security management that e.g. Unix/POSIX (Or you just leave it out on extremely resource limited target devices). In practice this is done mostly with one or more resource manager processes which belong to the trusted computing base. They get initialized at boot time (not a must) along with the kernel and acquire IRQ's, memory, I/O ports etc... Any process must further communicate to the resource manager(s) to get special resources either mapped, granted or notified of (IRQ's are messages as in Neutrino).
+
+
+
+/* NameService server */
+#include <ports>
+
+using namespace steam;
+
+class dispatcher {
+	public:
+		dispatcher();
+		~dispatcher();
+
+};
+
+class nameservice : public port, dispatcher {
+	public:
+		nameservice();
+		~nameservice();
+
+		void dispatch(void *msg);
+	private:
+		char **namelist;
+};
+
+int main()
+{
+	nameservice namer;
+}
+
+/* NameService client */
+#include <ports>
+
+using namespace steam;
+
+class 

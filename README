@@ -1,0 +1,12 @@
+
+Welcome to Quarks
+
+Quarks is an experimental microkernel-based system I am writing in
+my spare time. It is an attempt to implement such a project completely in C++
+while maintaining source code readability, small footprint and speed.
+
+For further documentation and how to build, install and run please read
+the documentation in the doc directory.
+
+Have fun.
+Peter Kleinstück <pkx544@myrealbox.com>

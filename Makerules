@@ -1,0 +1,93 @@
+
+# Read common configuration
+include $(topdir)/Makeconf
+
+# Find all source files
+vpath % $(srcdirs)
+
+objdir := obj.$(arch)
+
+files := $(wildcard *) $(foreach dir, $(srcdirs), $(wildcard $(dir)/*))
+ifeq ($(objects),)
+objects := \
+	$(patsubst %.c,  %.o,$(filter %.c,  $(files))) \
+	$(patsubst %.C,  %.o,$(filter %.C,  $(files))) \
+	$(patsubst %.cc, %.o,$(filter %.cc, $(files))) \
+	$(patsubst %.cpp,%.o,$(filter %.cpp,$(files))) \
+	$(patsubst %.S,  %.o,$(filter %.S,  $(files)))
+endif
+objects := $(sort $(objects))
+objects := $(filter-out $(targets) $(crt0) $(crtn), $(objects))
+objects := $(addprefix $(objdir)/, $(notdir $(objects)))
+crt0 := $(addprefix $(objdir)/, $(notdir $(crt0)))
+crtn := $(addprefix $(objdir)/, $(notdir $(crtn)))
+
+# Get rid of builtin suffixes
+.SUFFIXES:
+
+# Some phony targets and what to build by default
+.PHONY: clean all $(subdirs)
+
+# What to build by default
+all: $(subdirs) $(targets)
+
+# How to build subdirs
+$(subdirs):
+	$(MAKE) -C $@ $(filter-out $(subdirs), $(MAKECMDGOALS))
+
+# Targets depend on their objects being built first
+$(targets): $(objdir) $(objects) $(crt0) $(crtn)
+
+# Rebuild all objects if someone touched some Makefile
+$(objects): Makefile $(topdir)/Makeconf $(topdir)/Makerules
+
+# Object files get stored in a separate directory. Make sure it exists.
+$(objdir):
+	$(MKDIR) $@
+
+# How to build objects from the sources
+$(objdir)/%.o: %.c
+	$(CC) -MD $(cppflags) $(cflags) $(optimize) $(warnings) -c $< -o $@
+	$(magic)
+
+$(objdir)/%.o: %.cpp
+	$(CC) -MD $(cppflags) $(cxxflags) $(optimize) $(warnings) -c $< -o $@
+	$(magic)
+
+$(objdir)/%.o: %.S
+	$(CC) -MD $(cppflags) $(asflags) -c $< -o $@
+	$(magic)
+
+# This is needed in order to build targets without extension correctly
+$(objdir)/%.d:
+
+# How to build binaries and libraries
+%.so:
+	$(LD) $(ldflags) -shared $(objects) -o $@
+
+%.a:
+	$(AR) cr $@ $(objects)
+
+%:
+	$(LD) $(ldflags) $(crt0) $(objects) $(crtn) -o $@
+	$(XRES) -o $@ $(resources)
+	$(MIMESET) -f $@
+
+# How to clean up
+clean: $(subdirs)
+	$(RM) *.dbg $(targets) $(objects) $(crt0) $(crtn)
+
+distclean: clean
+	$(RM) $(objects:.o=.d)
+	$(RMDIR) $(objdir)
+
+# How to install
+install: all
+
+# Include all the needed dependencies
+ifneq ($(objects),)
+-include $(objects:.o=.d)
+endif
+
+# Adjust the dependencies to correct obj directory
+magic = @sed -e 's^$*.o^$@^' < $*.d > $(objdir)/$(*F).d; rm -f $*.d

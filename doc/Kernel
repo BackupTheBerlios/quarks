@@ -1,0 +1,9 @@
+
+Quarks microkernel internals
+
+	This document describes the internals of the Quarks microkernel.
+
+1. Scheduler
+
+	Quarks implements a mixed soft- and hard realtime scheduler that works much like the BeOS scheduler. Threads can have priorities from 0 to 255. Priorities 0 to 127 are soft realtime, priorities above hard realtime. Hard realtime threads can only be interrupted by threads with higher priorities while low-priority soft realtime threads can interrupt other soft realtime threads with higher priority.
+	Threads are maintained in 256 thread queues, one for each priority.
