@@ -12,7 +12,7 @@
 
 #define CON_SCREEN	(unsigned char *)0x000B8000
 
-/*enum {
+enum {
 	ScreenRows = 25,
 	ScreenColumns = 80
 };
@@ -26,11 +26,11 @@ enum ScreenColor {
 	cMagenta,
 	cYellow,
 	cWhite
-};*/
+};
 
-#define	ScreenRows 25
+/*#define	ScreenRows 25
 #define	ScreenColumns 80
-#define cWhite	7
+#define cWhite	7*/
 
 #ifdef __cplusplus
 extern "C" {
