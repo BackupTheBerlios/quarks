@@ -1,11 +1,9 @@
 
-topdir	= ..
-srcdirs	= $(arch)
-subdirs	= $(arch)/console libzz #quarks
+topdir		= ../..
 optimize	= -O2
 warnings	= -Wall
 cppflags	= -nostdinc -fno-builtin -I$(topdir)/include
 cflags	= -no-fpic
-targets	= libkern.a
+targets		= libzz.a
 
 include $(topdir)/Makerules

@@ -8,6 +8,7 @@
 
 */
 #include "../boot/x86/boot.h"
+#include "../include/lzss.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -314,6 +315,7 @@ arg *get_nextarg(arg *a)
 #define IFS_FILE		0x02
 #define IFS_ROOT		0x04
 #define IFS_BOOTSTRAP	0x10
+#define IFS_COMPRESSED	0x20
 
 typedef struct ifs_entry {
 	char *name;
@@ -329,6 +331,7 @@ ifs_entry *root = 0, **current;
 static char *searchpath = 0;
 static char *bootstrap = 0;
 static ifs_entry *bootstrap_entry = 0;
+static lzss_workmem *zip_mem = 0;
 
 /* duplicates a string up to len bytes and null-terminates it */
 char *strndup(const char *string, int len)
@@ -486,7 +489,7 @@ void build_directory(section *image)
 int write_files(ifs_entry *r, int outf, int offset)
 {
 	ifs_entry *entry;
-	void *data;
+	char *data, *compressed;
 	int size;
 
 	printf("reading dir\n");
@@ -498,10 +501,17 @@ int write_files(ifs_entry *r, int outf, int offset)
 			if (!(data = loadfile(entry->realname, &size))) {
 				die("cannot load file\n", NULL);
 			}
+			compressed = malloc(size * 2);
+			printf("compressing %d\n", size);
+			*(int *)compressed = size;	/* store original size for decompression */
+			size = Encode(zip_mem, compressed + sizeof(int), size * 2, data, size);
+			entry->size = size;
 			entry->offset = offset;
-			if ((size = write(outf, data, size)) == -1) {
+			printf("compressed %d\n", size);
+			if ((size = write(outf, compressed, size)) == -1) {
 				die("error: could not write file: %s\n", strerror(errno));
 			}
+			free(compressed);
 			free(data);
 			offset += size;
 
@@ -520,7 +530,7 @@ int write_directories(ifs_entry *r, int outf, int offset)
 	ifs_entry *entry;
 	ifs_inode *inode;
 	int size, len, count = 0, offs = offset;
-	iovec iov[64];
+	iovec iov[64]; /* FIXME: allow more than 64 entries per directory. */
 
 	/*printf("reading dir\n");*/
 	for (entry = r; entry; entry = entry->next) {
@@ -568,6 +578,8 @@ void write_image(char *outfile)
 		die("cannot write to \"%s\"\n", outfile);
 	}
 
+	zip_mem = malloc(sizeof(lzss_workmem));
+
 	size = bootstrap_entry->size;
 	if (!(data = loadfile(bootstrap_entry->realname, &size))) {
 		die("cannot load bootstrap file\n", NULL);
@@ -583,6 +595,8 @@ void write_image(char *outfile)
 	printf("offset of directory: %x\n", bytes);
 
 	bytes = write_directories(root, outf, bytes);
+
+	free(zip_mem);
 
 	close(outf);
 }
