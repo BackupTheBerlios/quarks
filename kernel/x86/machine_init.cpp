@@ -8,7 +8,7 @@
 
 */
 #include "machine.h"
-#include <quarks/intel/io.h>
+#include <quarks/x86/io.h>
 
 __init_ Machine::Machine()
 {

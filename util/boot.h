@@ -14,14 +14,14 @@ typedef struct {
 	int	offset;					/* offset of file relative to the start of image */
 	int	size;					/* size of file */
 	int	mode : 16;			/* mode in usual unix manner */
-	int flags : 8;				/* flags 
+	int flags : 8;				/* flags */
 	int namelen : 8;			/* length of name string */
 } sbbb_inode;					/* name follows the inode immediately */
 
 #define SBBB_MAGIC		0x38de7a19
 
 typedef struct {
-	int magic;					/* 
+	int magic;					/* */
 	int flags;					/* currently unused */
 	int reserved;				/* currently unused */
 	char name[16];			/* name of image */

@@ -7,7 +7,7 @@
 	it without license.
 
 */
-#include "quarks/intel/io.h"
+#include "quarks/x86/io.h"
 #include "machine.h"
 
 #ifdef BIG_SINGLE_SOURCE

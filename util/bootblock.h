@@ -3,7 +3,7 @@
 
 	Copyright (C) 2001 Peter Kleinstueck <pkx544@myrealbox.com>
 
-	This program is free software; you can redistribute it and/or modify
+	This is free software; you can redistribute it and/or modify
 	it without license.
 
 */
