@@ -1,4 +1,6 @@
 
+# CPPFLAGS	= -I../include
+
 all: mkifs 
 
 mkifs: mkifs.o

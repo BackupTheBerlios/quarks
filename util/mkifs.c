@@ -7,9 +7,6 @@
    it without license.
 
 */
-#include "../boot/x86/boot.h"
-#include "../include/lzss.h"
-
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -20,6 +17,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#include "../boot/x86/boot.h"
+#include "../include/lzss.h"
 
 void die(char *s, char *a)
 {
@@ -332,6 +332,7 @@ static char *searchpath = 0;
 static char *bootstrap = 0;
 static ifs_entry *bootstrap_entry = 0;
 static lzss_workmem *zip_mem = 0;
+static unsigned int rootoffs = 0;
 
 /* duplicates a string up to len bytes and null-terminates it */
 char *strndup(const char *string, int len)
@@ -562,6 +563,9 @@ int write_directories(ifs_entry *r, int outf, int offset)
 		if ((size = writev(outf, iov, count)) == -1) {
 			die("error: could not write file: %s\n", strerror(errno));
 		}
+		if (r == root) {
+			rootoffs = offset;
+		}
 		offset += size;
 	}
 	/*printf("end of dir\n");*/
@@ -570,9 +574,10 @@ int write_directories(ifs_entry *r, int outf, int offset)
 
 void write_image(char *outfile)
 {
-	int outf, size, bytes;
+	int outf, size, bytes, i;
 	char *data;
 	ifs_entry *entry;
+	ifs_superblock *superblock;
 
 	if ((outf = creat(outfile, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1) {
 		die("cannot write to \"%s\"\n", outfile);
@@ -588,13 +593,30 @@ void write_image(char *outfile)
 	if ((bytes = write(outf, data, size)) == -1) {
 		fprintf(stderr, "warning: could not write entire file\n");
 	}
-	free(data);
+/*	free(data);*/
 
 	bytes = write_files(root, outf, bytes);
 
 	printf("offset of directory: %x\n", bytes);
 
 	bytes = write_directories(root, outf, bytes);
+
+	for (i = 0; i < 8192; i++) {
+		superblock = (ifs_superblock *)&data[i];
+		if (superblock->mb_header.magic == MULTIBOOT_MAGIC &&
+				superblock->magic == IFS_MAGIC) {
+			printf("superblock found at offset %x hex\n", i);
+			break;
+		}
+	} 
+
+	superblock->root = (ifs_inode *)rootoffs;
+	printf("root dir at: %x\n", rootoffs);
+
+	lseek(outf, i, SEEK_SET);
+	write(outf, superblock, sizeof(ifs_superblock));
+
+	free(data);
 
 	free(zip_mem);
 

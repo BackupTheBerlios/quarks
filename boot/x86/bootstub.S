@@ -10,7 +10,7 @@
 	.text
 	.globl _start
 
-/* Entry point is at linear adress 0x10000 */
+/* Entry point is at linear adress 0x100000 */
 _start:
 	lgdt	temp_gdt
 	ljmp	$0x8, $new_cs
@@ -22,19 +22,13 @@ new_cs:
 	mov		%ax, %gs
 	mov		%ax, %ss
 
-	pushl	%ebp
-	movl	%esp, %ebp
-	subl	$0x18, %esp
-	movl	%ebp, -4(%ebp)
-	movl	0xc(%ebp), %eax
-	pushl	%eax
-	movl	-4(%ebp), %eax
-	pushl	%eax
-	movl	0x8(%ebp), %eax
-	pushl	%eax
-	movl	0x10(%ebp), %eax
-	pushl	%eax
+	movl	$0xa0000, %eax
+	movl	%eax, %ebp
+	movl	%eax, %esp
+
+	pushl	%ebx
 	call	startup
+
 	hlt
 
 	ret

@@ -77,7 +77,7 @@ size_t strlen(const char *s)
 	return (s1 - s);
 }
 
-size_t strnlen (const char *s, size_t count)
+size_t strnlen(const char *s, size_t count)
 {
    const char *s1;
    for (s1 = s; *s1 != '\0' && count--; ++s1);

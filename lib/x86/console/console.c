@@ -17,7 +17,7 @@ static int attr = 1, px = 0, py = ScreenRows - 1;
 static unsigned char *screen = CON_SCREEN;
 static unsigned char *posn   = CON_SCREEN + ScreenColumns * ScreenRows * 2;
 
-#define LastRow	((ScreenColumns - 1) * ScreenRows * 2)
+#define LastRow	((ScreenRows - 1) * ScreenColumns * 2)
 
 void ScrollUp(void) 
 {
