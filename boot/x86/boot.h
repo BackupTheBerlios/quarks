@@ -60,6 +60,12 @@ typedef struct mb_head {
 	void (*entry)();			/* adress of startup entry */
 } multiboot_header;
 
+#define IFS_DIR			0x01
+#define IFS_FILE		0x02
+//#define IFS_ROOT		0x04
+#define IFS_BOOTSTRAP	0x04
+#define IFS_COMPRESSED	0x10
+
 typedef struct ifs_inode {
 	union {
 		void *ptr;
@@ -81,6 +87,7 @@ typedef struct ifs_superblock {
 		ifs_inode *inode;		/* first directory or file entry */
 		unsigned int offset;
 	} root;
+	unsigned int size;			/* size of the whole image */
 	char name[16];				/* name of image */
 } ifs_superblock;
 

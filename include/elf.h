@@ -1,10 +1,10 @@
 /*
-	Quarks microkernel
+   Quarks microkernel
 
-	Copyright (C) 2001 Peter Kleinstueck <pkx544@myrealbox.com>
+   Copyright (C) 2001 Peter Kleinstueck <pkx544@myrealbox.com>
 
-	This is free software; you can redistribute it and/or modify
-	it without license.
+   This is free software; you can redistribute it and/or modify
+   it without license.
 
 */
 #ifndef ELF_H
@@ -14,7 +14,7 @@
 
 /* ELF header */
 typedef struct {
-	unsigned char e_ident [EI_NIDENT];
+	unsigned char e_ident[EI_NIDENT];
 	unsigned short e_type, e_machine;
 	unsigned int e_version, e_entry, e_phoff, e_shoff, e_flags;
 	unsigned short e_ehsize, e_phentsize, e_phnum, e_shentsize, e_shnum,
@@ -206,14 +206,14 @@ typedef struct {
 extern "C" {
 #endif
 
-elf32_sec_hdr_t *_elf_find_section_hdr (elf32_hdr_t *hdr, char *name);
-elf32_sec_hdr_t *elf_find_section_hdr (elf32_hdr_t *hdr, char *name);
-void *_elf_lookup_sym (int filenum, const char *name);
-void *elf_lookup_sym (int filenum, const char *name);
-void *_elf_find_section_data (elf32_hdr_t *hdr, char *name);
-void *elf_find_section_data (elf32_hdr_t *hdr, char *name);
-int _elf_section_size (elf32_hdr_t *hdr, char *name);
-int elf_section_size (elf32_hdr_t *hdr, char *name);
+elf32_sec_hdr_t *_elf_find_section_hdr(elf32_hdr_t *hdr, char *name);
+elf32_sec_hdr_t *elf_find_section_hdr(elf32_hdr_t *hdr, char *name);
+void *_elf_lookup_sym(int filenum, const char *name);
+void *elf_lookup_sym(int filenum, const char *name);
+void *_elf_find_section_data(elf32_hdr_t *hdr, char *name);
+void *elf_find_section_data(elf32_hdr_t *hdr, char *name);
+int _elf_section_size(elf32_hdr_t *hdr, char *name);
+int elf_section_size(elf32_hdr_t *hdr, char *name);
 
 #ifdef __cplusplus
 }

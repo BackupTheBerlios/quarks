@@ -13,3 +13,5 @@ YACC		= yacc
 
 XRES		= xres
 MIMESET	= mimeset
+
+base		= 0x100000

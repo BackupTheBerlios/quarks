@@ -39,8 +39,6 @@ CODE16
 ORG 0x7c00               ; start code at 0x7c00
 	jmp short start
 	dw	30
-	;mov cx,0x1           ; this is interpreted as data (bytes 3 and 4)
-	                     ; and patched from outside to the size of the bootcode (in sectors)
 start:
 	cli                  ; no interrupts please
 	cld
@@ -76,9 +74,6 @@ b:
 	sti
 	call func3           ; read remaining sectors at address edi
 	cli
-	;call find_mem_size
-
-	;mov [0x4000],eax     ; save memory size at that address
 
 	mov al,0xcf
 	mov [ds:gdt+14],al    ; set desc. 1 and 2

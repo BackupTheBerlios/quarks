@@ -31,7 +31,7 @@ draft-proposed ANSI C.  I tested them with Turbo C 2.0.
 
 #include <lzss.h>
 
-void InitTree(lzss_workmem *m)  /* initialize trees */
+void InitTree(lzss_encodestream *m)  /* initialize trees */
 {
 	int  i;
 
@@ -56,7 +56,7 @@ void InitTree(lzss_workmem *m)  /* initialize trees */
    If match_length = F, then removes the old node in favor of the new
    one, because the old one will be deleted sooner.
    Note r plays double role, as tree node and position in buffer. */
-void InsertNode(lzss_workmem *m, int r)
+void InsertNode(lzss_encodestream *m, int r)
 {
 	int  i, p, cmp;
 	unsigned char  *key;
@@ -112,7 +112,7 @@ void InsertNode(lzss_workmem *m, int r)
 }
 
 /* deletes node p from tree */
-void DeleteNode(lzss_workmem *m, int p)
+void DeleteNode(lzss_encodestream *m, int p)
 {
 	int q;
 
@@ -150,9 +150,9 @@ void DeleteNode(lzss_workmem *m, int p)
 }
 
 /* unpacks src buffer into dest, returns length of unpacked data. */
-int Encode(lzss_workmem *m, char *dest, int destlen, const char *src, int srclen)
+int Encode(lzss_encodestream *m, char *dest, int destlen, const char *src, int srclen)
 {
-	int  i, c, len, r, s, last_match_length, code_buf_ptr, incount = 0, outcount = 0;
+	int  i, c, len, r, s, last_match_length, code_buf_ptr, incount = 0, outcount = sizeof(unsigned int);
 	unsigned char code_buf[17], mask;
 
 	InitTree(m);  /* initialize trees */
@@ -164,15 +164,14 @@ int Encode(lzss_workmem *m, char *dest, int destlen, const char *src, int srclen
 
 	code_buf_ptr = mask = 1;
 
-	s = 0;  r = N - F;
+	s = 0;
+	r = N - F;
 
 	for (i = s; i < r; i++)
-		m->text_buf[i] = ' ';  /* Clear the buffer with
-                                                        any character that will appear often. */
+		m->text_buf[i] = ' ';  /* Clear the buffer with any character that will appear often. */
 
-	for (len = 0; len < F && incount < srclen; len++) {
+	for (len = 0; len < F && incount < srclen; len++, incount++) {
 		c = src[incount];
-		incount++;
 		m->text_buf[r + len] = c;  /* Read F bytes into the last F bytes of the buffer */
 	}
 
@@ -193,19 +192,19 @@ int Encode(lzss_workmem *m, char *dest, int destlen, const char *src, int srclen
 			m->match_length = len;  /* match_length
                                                                 may be spuriously long near the end of text. */
 
-		if (m->match_length <= THRESHOLD) {
+		if (m->match_length < THRESHOLD) {
 			m->match_length = 1;  /* Not long enough match.  Send one byte. */
 			code_buf[0] |= mask;  /* 'send one byte' flag */
 			code_buf[code_buf_ptr++] = m->text_buf[r];  /* Send uncoded. */
 		} else {
 			code_buf[code_buf_ptr++] = (unsigned char)m->match_position;
-			code_buf[code_buf_ptr++] = (unsigned char)(((m->match_position >> 4) & 0xf0) | (m->match_length - (THRESHOLD + 1)));
+			code_buf[code_buf_ptr++] = (unsigned char)(((m->match_position >> 4) & 0xf0) | (m->match_length - THRESHOLD));
 			/* Send position and length pair. Note match_length > THRESHOLD. */
 		}
 
 		if ((mask <<= 1) == 0) {    /* Shift mask left one bit. */
-			for (i = 0; i < code_buf_ptr; i++) {  /* Send at most 8 units of */
-				dest[outcount++] = code_buf[i];     /* code together */
+			for (i = 0; i < code_buf_ptr; i++, outcount++) {  /* Send at most 8 units of */
+				dest[outcount] = code_buf[i];     /* code together */
 			}
 
 			code_buf[0] = 0;
@@ -213,9 +212,8 @@ int Encode(lzss_workmem *m, char *dest, int destlen, const char *src, int srclen
 		}
 
 		last_match_length = m->match_length;
-		for (i = 0; i < last_match_length && incount < srclen; i++) {
+		for (i = 0; i < last_match_length && incount < srclen; i++, incount++) {
 			c = src[incount];
-			incount++;
 			DeleteNode(m, s);          /* Delete old strings and */
 			m->text_buf[s] = c;        /* read new bytes */
 			if (s < F - 1)
@@ -242,59 +240,69 @@ int Encode(lzss_workmem *m, char *dest, int destlen, const char *src, int srclen
 	} while (len > 0);      /* until length of string to be processed is zero */
 
 	if (code_buf_ptr > 1) {   /* Send remaining code. */
-		for (i = 0; i < code_buf_ptr; i++) {
-			dest[outcount++] = code_buf[i];
+		for (i = 0; i < code_buf_ptr; i++, outcount++) {
+			dest[outcount] = code_buf[i];
 		}
 	}
+	*(unsigned int *)dest = outcount;
 	return outcount;
 }
 
-/* Just the reverse of Encode(). */
-int Decode(lzss_workmem *m, char *dest, int destlen, const char *src, int srclen)
+void InitDecoder(lzss_decodestream *s, const char *source)
 {
-	int  i, j, k, r, outcount = 0, incount = 0;
+	s->j = 0;
+	s->r = N - F;
+	s->flags = 0;
+	s->length = *(unsigned int *)source;
+	s->source = &source[sizeof(unsigned int)];
+	for (s->i = 0; s->i < N - F; s->i++)
+		s->buffer[s->i] = ' ';
+}
+
+/* Just the reverse of Encode(). */
+int Decode(lzss_decodestream *s, char *dest, int count)
+{
 	unsigned char c;
-	unsigned int flags;
+	int /*c,*/ y = 0;
 
-	for (i = 0; i < N - F; i++)
-		m->text_buf[i] = ' ';
+	while (s->j && y < count) {
+		c = s->buffer[s->i++];
+		dest[y++] = c;
+		s->buffer[s->r++] = c;
+		s->r &= (N - 1);
+		s->i &= (N - 1);
+		s->j--;
+	}
 
-	r = N - F;
-	flags = 0;
-
-	for (;;) {
-		if (((flags >>= 1) & 256) == 0) {
-			if (incount == srclen)
+	for ( ; s->count < s->length && y < count; s->count++) {
+		if (((s->flags >>= 1) & 256) == 0) {
+			c = s->source[s->count++];
+			if (s->count == s->length)
 				break;
-			c = (src[incount++] & 0xff);
-			flags = c | 0xff00;             /* uses higher byte cleverly */
-		}                                   /* to count eight */
-
-		if (flags & 1) {
-			if (incount == srclen)
-				break;
-			c = (src[incount++] & 0xff);
-			dest[outcount++] = c;
-			m->text_buf[r++] = c;
-			r &= (N - 1);
+			s->flags = c | 0xff00;		/* uses higher byte cleverly */
+		}							/* to count eight */
+		if (s->flags & 1) {
+			c = s->source[s->count];
+			dest[y++] = c;
+			s->buffer[s->r++] = c;
+			s->r &= (N - 1);
 		} else {
-			if (incount == srclen)
+			s->i = s->source[s->count++] & 0xff;
+			if (s->count == s->length)
 				break;
-			i = (src[incount++] & 0xff);
-
-			if (incount == srclen)
-				break;
-			j = (src[incount++] & 0xff);
-
-			i |= ((j & 0xf0) << 4);
-			j = (j & 0x0f) + THRESHOLD;
-			for (k = 0; k <= j; k++) {
-				c = m->text_buf[(i + k) & (N - 1)];
-				dest[outcount++] = c;
-				m->text_buf[r++] = c;
-				r &= (N - 1);
+			s->j = s->source[s->count];
+			s->i |= ((s->j & 0xf0) << 4);
+			s->i &= (N - 1);
+			s->j = (s->j & 0x0f) + THRESHOLD;
+			while (s->j && y < count) {
+				c = s->buffer[s->i++];
+				dest[y++] = c;
+				s->buffer[s->r++] = c;
+				s->r &= (N - 1);
+				s->i &= (N - 1);
+				s->j--;
 			}
 		}
 	}
-	return outcount;
+	return y;
 }

@@ -17,9 +17,10 @@ objects := \
 	$(patsubst %.S,  %.o,$(filter %.S,  $(files)))
 endif
 objects := $(sort $(objects))
-objects := $(filter-out $(targets) $(crt0) $(crtn), $(objects))
+objects := $(filter-out $(targets) $(crt0) $(crt1) $(crtn), $(objects))
 objects := $(addprefix $(objdir)/, $(notdir $(objects)))
 crt0 := $(addprefix $(objdir)/, $(notdir $(crt0)))
+crt1 := $(addprefix $(objdir)/, $(notdir $(crt1)))
 crtn := $(addprefix $(objdir)/, $(notdir $(crtn)))
 
 # Get rid of builtin suffixes
@@ -36,7 +37,7 @@ $(subdirs):
 	$(MAKE) -C $@ $(filter-out $(subdirs), $(MAKECMDGOALS))
 
 # Targets depend on their objects being built first
-$(targets): $(objdir) $(objects) $(crt0) $(crtn)
+$(targets): $(objdir) $(objects) $(crt0) $(crt1) $(crtn)
 
 # Rebuild all objects if someone touched some Makefile
 $(objects): Makefile $(topdir)/Makeconf $(topdir)/Makerules
@@ -69,14 +70,14 @@ $(objdir)/%.d:
 	$(AR) cr $@ $(objects)
 
 %:
-	$(LD) $(ldflags) $(crt0) $(objects) $(crtn) -o $@ $(libs)
+	$(LD) $(ldflags) $(crt0) $(crt1) $(objects) $(crtn) -o $@ $(libs)
 
 # How to clean up
 clean: $(subdirs)
-	$(RM) *.dbg $(targets) $(objects) $(crt0) $(crtn)
+	$(RM) *.dbg $(targets) $(objects) $(crt0) $(crt1) $(crtn)
 
 distclean: clean
-	$(RM) $(objects:.o=.d) $(crt0:.o=.d) $(crtn:.o=.d)
+	$(RM) $(objects:.o=.d) $(crt0:.o=.d) $(crt1:.o=.d) $(crtn:.o=.d)
 	$(RM) -R $(objdir)
 
 # How to install
@@ -85,6 +86,15 @@ install: all
 # Include all the needed dependencies
 ifneq ($(objects),)
 -include $(objects:.o=.d)
+endif
+ifneq ($(crt0),)
+-include $(crt0:.o=.d)
+endif
+ifneq ($(crt1),)
+-include $(crt1:.o=.d)
+endif
+ifneq ($(crtn),)
+-include $(crtn:.o=.d)
 endif
 
 # Adjust the dependencies to correct obj directory

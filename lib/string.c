@@ -7,6 +7,7 @@
 	it without license.
 
 */
+#include <errno.h>
 #include <string.h>
 
 char *strcpy(char *dest, const char *src)
@@ -118,4 +119,9 @@ void *memset(void *s, int c, size_t count)
 		*xs++ = c;
       
 	return s;
+}
+
+char *strerror(int errnum)
+{
+	return errstrings[errnum];
 }

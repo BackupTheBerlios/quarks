@@ -311,11 +311,11 @@ arg *get_nextarg(arg *a)
 	return a->next;
 }
 
-#define IFS_DIR			0x01
+/*#define IFS_DIR			0x01
 #define IFS_FILE		0x02
 #define IFS_ROOT		0x04
 #define IFS_BOOTSTRAP	0x10
-#define IFS_COMPRESSED	0x20
+#define IFS_COMPRESSED	0x20*/
 
 typedef struct ifs_entry {
 	char *name;
@@ -331,7 +331,8 @@ ifs_entry *root = 0, **current;
 static char *searchpath = 0;
 static char *bootstrap = 0;
 static ifs_entry *bootstrap_entry = 0;
-static lzss_workmem *zip_mem = 0;
+static lzss_encodestream *zip_mem = 0;
+static unsigned int base = 0;
 
 /* duplicates a string up to len bytes and null-terminates it */
 char *strndup(const char *string, int len)
@@ -438,6 +439,7 @@ void add_file(char *name)
 		file->flags = IFS_FILE;
 		if (!strcmp(fname, bootstrap)) {
 			file->flags |= IFS_BOOTSTRAP;
+			file->offset = base;
 			bootstrap_entry = file;
 		}
 		file->name = strdup(fname);
@@ -502,13 +504,14 @@ int write_out(ifs_entry *r, int outf, int *offset)
 		switch (entry->flags) {
 			case IFS_FILE:
 				printf("writing file %s\n", entry->name);
-				entry->offset = *offset;
+				entry->offset = *offset + base;
 				size = entry->size;
 				if (!(data = loadfile(entry->realname, &size))) {
 					die("cannot load file\n", NULL);
 				}
 				compressed = malloc(size * 2);
 				size = Encode(zip_mem, compressed, size * 2, data, size);
+				entry->flags |= IFS_COMPRESSED;
 				if ((size = write(outf, compressed, size)) == -1) {
 					die("error: could not write file: %s\n", strerror(errno));
 				}
@@ -518,10 +521,14 @@ int write_out(ifs_entry *r, int outf, int *offset)
 				break;
 
 			case IFS_DIR:
-				printf("change to directory %s\n", entry->name);
-				diroffs = *offset;
-				entry->offset = write_out(entry->subdirs, outf, offset);
-				entry->size = *offset - diroffs;
+				printf("change to directory %s, %d\n", entry->name, *offset);
+				//diroffs = *offset;
+				entry->offset = write_out(entry->subdirs, outf, offset) + base;
+				printf("%x\n", entry->offset);
+				if (entry->offset > base)
+					entry->size = *offset - entry->offset + base;//diroffs;
+				else
+					entry->size = 0;
 				break;
 		}
 		printf("adding entry %s, %x, %d\n", entry->name, entry->offset, entry->size);
@@ -544,7 +551,7 @@ int write_out(ifs_entry *r, int outf, int *offset)
 		}
 		*offset += size;
 	}
-	printf("end of dir\n");
+	printf("end of dir, directory offset = %x\n", diroffs);
 	return diroffs;
 }
 
@@ -559,7 +566,7 @@ void write_image(char *outfile)
 		die("cannot write to \"%s\"\n", outfile);
 	}
 
-	zip_mem = malloc(sizeof(lzss_workmem));
+	zip_mem = malloc(sizeof(lzss_encodestream));
 
 	size = bootstrap_entry->size;
 	if (!(data = loadfile(bootstrap_entry->realname, &size))) {
@@ -579,9 +586,10 @@ void write_image(char *outfile)
 		}
 	} 
 
-	superblock->root.offset = write_out(root, outf, &bytes);
+	superblock->root.offset = write_out(root, outf, &bytes) + base;
+	superblock->size = bytes;
 
-	printf("root dir at: %x, size of image = %d\n", superblock->root.offset, bytes);
+	printf("root dir at: %x, size of image = %d\n", superblock->root.offset, superblock->size);
 
 	lseek(outf, i, SEEK_SET);
 	write(outf, superblock, sizeof(ifs_superblock));
@@ -635,7 +643,7 @@ void mkifs(section *sections, char *outfile)
 
 void usage(char *progname)
 {
-	fprintf(stderr,"usage: %s [ <inifile> ... -r <searchpath> ] -o <bootfile>\n", progname);
+	fprintf(stderr,"usage: %s [ <inifile> ... -r <searchpath> -b <base> ] -o <bootfile>\n", progname);
 }
 
 int main(int argc, char **argv)
@@ -681,6 +689,28 @@ int main(int argc, char **argv)
 				}
 			} else {
 				fprintf(stderr, "error: option -r requires a path\n");
+				usage(progname);
+				return 1;
+			}
+		} else if (!strcmp(*argv, "-b")) {
+			argc--;
+			argv++;
+			if (argc) {
+				if (*argv[0] != '-') {
+					char *end;
+					base = strtoul(*argv, &end, 0);
+					if (end < (*argv + strlen(*argv))) {
+						fprintf(stderr, "error: please specify a valid 'base'\n");
+						usage(progname);
+						return 1;
+					}
+				} else {
+					fprintf(stderr, "error: option -b requires a base adress\n");
+					usage(progname);
+					return 1;
+				}
+			} else {
+				fprintf(stderr, "error: option -b requires a base adress\n");
 				usage(progname);
 				return 1;
 			}

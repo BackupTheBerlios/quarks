@@ -1,10 +1,10 @@
 /*
-	Quarks microkernel
+   Quarks microkernel
 
-	Copyright (C) 2001 Peter Kleinstueck <pkx544@myrealbox.com>
+   Copyright (C) 2001 Peter Kleinstueck <pkx544@myrealbox.com>
 
-	This is free software; you can redistribute it and/or modify
-	it without license.
+   This is free software; you can redistribute it and/or modify
+   it without license.
 
 */
 #ifndef STDARG_H

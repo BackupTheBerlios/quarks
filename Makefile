@@ -5,7 +5,7 @@ subdirs	= lib kernel boot/$(arch) util
 include $(topdir)/Makerules
 
 qfs:
-	util/mkifs util/quarks.ini -o quarks.qfs
+	util/mkifs util/quarks.ini -b $(base) -o quarks.qfs
 
 floppy: qfs
 	dd if=/dev/zero of=quarks.img bs=1024 count=1440
