@@ -332,7 +332,6 @@ static char *searchpath = 0;
 static char *bootstrap = 0;
 static ifs_entry *bootstrap_entry = 0;
 static lzss_workmem *zip_mem = 0;
-static unsigned int rootoffs = 0;
 
 /* duplicates a string up to len bytes and null-terminates it */
 char *strndup(const char *string, int len)
@@ -487,89 +486,66 @@ void build_directory(section *image)
 	}
 }
 
-int write_files(ifs_entry *r, int outf, int offset)
-{
-	ifs_entry *entry;
-	char *data, *compressed;
-	int size;
-
-	printf("reading dir\n");
-	for (entry = r; entry; entry = entry->next) {
-		if (entry->flags == IFS_FILE) {
-			printf("writing file %s\n", entry->name);
-
-			size = entry->size;
-			if (!(data = loadfile(entry->realname, &size))) {
-				die("cannot load file\n", NULL);
-			}
-			compressed = malloc(size * 2);
-			printf("compressing %d\n", size);
-			*(int *)compressed = size;	/* store original size for decompression */
-			size = Encode(zip_mem, compressed + sizeof(int), size * 2, data, size);
-			entry->size = size;
-			entry->offset = offset;
-			printf("compressed %d\n", size);
-			if ((size = write(outf, compressed, size)) == -1) {
-				die("error: could not write file: %s\n", strerror(errno));
-			}
-			free(compressed);
-			free(data);
-			offset += size;
-
-		}
-		if (entry->flags == IFS_DIR) {
-			printf("change to directory %s\n", entry->name);
-			offset = write_files(entry->subdirs, outf, offset);
-		}
-	}
-	printf("end of dir\n");
-	return offset;
-}
-
-int write_directories(ifs_entry *r, int outf, int offset)
+/* writes out the directory structure in entry *r, returns the offset to the dir entry
+   r, and the total size of bytes written in *offset */
+int write_out(ifs_entry *r, int outf, int *offset)
 {
 	ifs_entry *entry;
 	ifs_inode *inode;
-	int size, len, count = 0, offs = offset;
+	char *data, *compressed;
+	int size, len, count, diroffs = 0;
 	iovec iov[64]; /* FIXME: allow more than 64 entries per directory. */
 
-	/*printf("reading dir\n");*/
-	for (entry = r; entry; entry = entry->next) {
+	printf("reading dir\n");
+	for (entry = r, count = 0; entry; entry = entry->next, count++) {
 
-		if (entry->flags == IFS_DIR) {
-			printf("change to directory %s\n", entry->name);
-			entry->offset = offs;
-			offs = write_directories(entry->subdirs, outf, offs);
-			entry->size = offs - entry->offset;
-			if (entry->size == 0) {
-				entry->offset = 0;
-			}
+		switch (entry->flags) {
+			case IFS_FILE:
+				printf("writing file %s\n", entry->name);
+				entry->offset = *offset;
+				size = entry->size;
+				if (!(data = loadfile(entry->realname, &size))) {
+					die("cannot load file\n", NULL);
+				}
+				compressed = malloc(size * 2);
+				size = Encode(zip_mem, compressed, size * 2, data, size);
+				if ((size = write(outf, compressed, size)) == -1) {
+					die("error: could not write file: %s\n", strerror(errno));
+				}
+				free(compressed);
+				free(data);
+				*offset += size;
+				break;
+
+			case IFS_DIR:
+				printf("change to directory %s\n", entry->name);
+				diroffs = *offset;
+				entry->offset = write_out(entry->subdirs, outf, offset);
+				entry->size = *offset - diroffs;
+				break;
 		}
-		printf("adding entry %s, %x, %x, %d\n", entry->name, entry->offset, offs, entry->size);
+		printf("adding entry %s, %x, %d\n", entry->name, entry->offset, entry->size);
 		len = strlen(entry->name);
 		size = len + sizeof(ifs_inode);
 		inode = malloc(size);
-		inode->offset = entry->offset;
+		inode->data.offset = entry->offset;
 		inode->size = entry->size;
 		inode->flags = entry->flags;
 		inode->namelen = len;
-		strncpy((char *)(inode + 1), entry->name, len);
+		strncpy(inode->name, entry->name, len);
 		iov[count].iov_base = inode;
 		iov[count].iov_len = size;
-		count ++;
-		offs += size;
+
 	}
 	if (count) {
+		diroffs = *offset;
 		if ((size = writev(outf, iov, count)) == -1) {
 			die("error: could not write file: %s\n", strerror(errno));
 		}
-		if (r == root) {
-			rootoffs = offset;
-		}
-		offset += size;
+		*offset += size;
 	}
-	/*printf("end of dir\n");*/
-	return offset;
+	printf("end of dir\n");
+	return diroffs;
 }
 
 void write_image(char *outfile)
@@ -593,13 +569,6 @@ void write_image(char *outfile)
 	if ((bytes = write(outf, data, size)) == -1) {
 		fprintf(stderr, "warning: could not write entire file\n");
 	}
-/*	free(data);*/
-
-	bytes = write_files(root, outf, bytes);
-
-	printf("offset of directory: %x\n", bytes);
-
-	bytes = write_directories(root, outf, bytes);
 
 	for (i = 0; i < 8192; i++) {
 		superblock = (ifs_superblock *)&data[i];
@@ -610,8 +579,9 @@ void write_image(char *outfile)
 		}
 	} 
 
-	superblock->root = (ifs_inode *)rootoffs;
-	printf("root dir at: %x\n", rootoffs);
+	superblock->root.offset = write_out(root, outf, &bytes);
+
+	printf("root dir at: %x, size of image = %d\n", superblock->root.offset, bytes);
 
 	lseek(outf, i, SEEK_SET);
 	write(outf, superblock, sizeof(ifs_superblock));

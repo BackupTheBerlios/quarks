@@ -36,8 +36,8 @@ static ifs_superblock ifs_super __attribute__((__section__(".text"))) =
 	/* ifs superblock */
 	IFS_MAGIC,					/* magic ifs superblock number */
 	IFS_FLAGS,					/* flags, currently unused */
-	0 - IFS_MAGIC - IFS_FLAGS,				/* checksum above ifs header */
-	0,							/* offset of first inode, to be filled in by mkifs */
+	0 - IFS_MAGIC - IFS_FLAGS,	/* checksum above ifs header */
+	{ 0 },						/* offset of first inode, to be filled in by mkifs */
 	"Quarks bootfs"				/* name of image */
 };
 
@@ -51,12 +51,12 @@ int startup(multiboot_info *mbinfo)
 	InitConsole(CON_SCREEN);
 	Log("Starting Quarks...\n");
 	Log("Found superblock at %x, multiboot info at %x\n", (int)&ifs_super, (int)mbinfo);
-	Log("first entry at: %x\n", (int)ifs_super.root);
-	ifs_super.root = (ifs_inode *)((uint32)ifs_super.root + 0x100000);
+	Log("first entry at: %x\n", ifs_super.root.offset);
+	ifs_super.root.offset = ifs_super.root.offset + 0x100000;
 	Log("name = %s\n", ifs_super.name);
-	Log("%d\n", ifs_super.root->namelen);
-	strncpy(buf, (char *)ifs_super.root + sizeof(ifs_inode), ifs_super.root->namelen);
-	buf[ifs_super.root->namelen] = 0;
+	Log("%d\n", ifs_super.root.inode->namelen);
+	strncpy(buf, (char *)ifs_super.root.inode->name, ifs_super.root.inode->namelen);
+	buf[ifs_super.root.inode->namelen] = 0;
 	Log("name[1] = %s\n", buf);
 	/*Log("name[2] = %s\n", bd->bd_entry[2].name);*/
 

@@ -61,11 +61,15 @@ typedef struct mb_head {
 } multiboot_header;
 
 typedef struct ifs_inode {
-	unsigned int offset;		/* offset of file relative to the start of image */
+	union {
+		void *ptr;
+		unsigned int offset;		/* offset of file relative to the start of image */
+	} data;
 	unsigned int size;			/* size of file */
 	unsigned int mode : 16;		/* mode in usual unix manner */
 	unsigned int flags : 8;		/* flags */
 	unsigned int namelen : 8;	/* length of name string */
+	char name[0];
 } ifs_inode;					/* name follows the inode immediately */
 
 typedef struct ifs_superblock {
@@ -73,7 +77,10 @@ typedef struct ifs_superblock {
 	unsigned int magic;			/* magic ifs superblock number */
 	unsigned int flags;			/* currently unused */
 	unsigned int checksum;		/* a checksum, calculated just like the multiboot checksum */
-	ifs_inode *root;			/* first directory or file entry */
+	union {
+		ifs_inode *inode;		/* first directory or file entry */
+		unsigned int offset;
+	} root;
 	char name[16];				/* name of image */
 } ifs_superblock;
 
