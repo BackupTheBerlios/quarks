@@ -8,7 +8,7 @@
 
 */
 #include "console.h"
-#include <quarks/intel/io.h>
+#include <quarks/x86/io.h>
 
 void va_snprintf(char *b, int l, const char *fmt, va_list pvar);
 /*int va_snprintf (char *str, int l, const char *format, ...);*/
