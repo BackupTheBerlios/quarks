@@ -76,8 +76,8 @@ clean: $(subdirs)
 	$(RM) *.dbg $(targets) $(objects) $(crt0) $(crtn)
 
 distclean: clean
-	$(RM) $(objects:.o=.d)
-	$(RMDIR) $(objdir)
+	$(RM) $(objects:.o=.d) $(crt0:.o=.d) $(crtn:.o=.d)
+	$(RM) -R $(objdir)
 
 # How to install
 install: all
