@@ -63,15 +63,13 @@ $(objdir)/%.d:
 
 # How to build binaries and libraries
 %.so:
-	$(LD) $(ldflags) -shared $(objects) -o $@
+	$(LD) -shared $(ldflags) $(objects) -o $@
 
 %.a:
 	$(AR) cr $@ $(objects)
 
 %:
-	$(LD) $(ldflags) $(crt0) $(objects) $(crtn) -o $@
-	$(XRES) -o $@ $(resources)
-	$(MIMESET) -f $@
+	$(LD) $(ldflags) $(crt0) $(objects) $(crtn) -o $@ $(libs)
 
 # How to clean up
 clean: $(subdirs)
