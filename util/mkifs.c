@@ -12,9 +12,12 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/uio.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 void die(char *s, char *a)
@@ -307,25 +310,152 @@ arg *get_nextarg(arg *a)
 	return a->next;
 }
 
-ifs_dir *new_ifs_dir(char *name, int len)
+#define IFS_DIR			0x01
+#define IFS_FILE		0x02
+#define IFS_ROOT		0x04
+#define IFS_BOOTSTRAP	0x10
+
+typedef struct ifs_entry {
+	char *name;
+	char *realname;
+	int flags;
+	size_t size;
+	unsigned int offset;
+	struct ifs_entry *next;
+	struct ifs_entry *subdirs;
+} ifs_entry;
+
+ifs_entry *root = 0, **current;
+static char *searchpath = 0;
+static char *bootstrap = 0;
+static ifs_entry *bootstrap_entry = 0;
+
+/* duplicates a string up to len bytes and null-terminates it */
+char *strndup(const char *string, int len)
 {
-	ifs_dir *dir;
-
-	dir = calloc(sizeof(ifs_dir));
-
-	strndup(dir->name, name);
-	dir->flags = IFS_DIR;
-	return dir;
+	char *buf = malloc(len + 1);
+	strncpy(buf, string, len);
+	buf[len] = 0;
+	return buf;
 }
 
-ifs_dir *build_directory(section *image, char *bootfile, char *outfile)
+/* same as strncpy, but null-terminates the destination */
+void strncpyt(char *dest, const char *src, size_t len)
+{
+	strncpy(dest, src, len);
+	dest[len] = 0;
+}	
+
+/* add a directory to the tree */
+void add_directory(char *name)
+{
+	char substr[1024];
+	int s, p;
+	ifs_entry *dir;
+
+	if (name[0] == '/') {
+		s = 1;
+		current = &root;
+	} else {
+		s = 0;
+	}
+
+	for (p = s; ; p++) {
+		if (name[p] == '/' || name[p] == 0) {	/* delimiter found: save this substring */
+			if (p - s) {
+
+				strncpyt(substr, &name[s], p - s);
+				printf("check if directory %s exists...", substr);
+				for (dir = *current; dir; dir = dir->next) {
+					if (!(strcmp(dir->name, substr)) && dir->flags == IFS_DIR) {
+						break;
+					}
+				}
+				if (!dir) {
+					printf("not found, creating dir \"%s\"\n", substr);
+					dir = calloc(1, sizeof(ifs_entry));
+					dir->flags = IFS_DIR;
+					dir->name = strdup(substr);
+					dir->next = *current;
+					*current = dir;
+				} else {
+					printf("found directory, chdir to \"%s\"\n", substr);
+				}
+				s = p + 1;
+				current = &dir->subdirs;
+				if (name[p] == 0)
+					break;
+			} else
+				s++;
+		}
+	}
+}
+
+/* add a file to the tree */
+void add_file(char *name)
+{
+	ifs_entry *file;
+	char buf[1024], *fname, *p;
+	struct stat finfo;
+	int i;
+
+	if (searchpath) {
+		strcpy(buf, searchpath);
+		i = strlen(buf);
+		if (buf[i - 1] != '/') {
+			buf[i] = '/';
+			buf[i + 1] = 0;
+		}
+	} else {
+		buf[0] = 0;
+	}
+	strcat(buf, name);
+
+	/* first let's check if the file exists on the build system */
+	if (stat(buf, &finfo)) {
+		die("There was an error: %s\n", strerror(errno));
+	}
+
+	p = fname = name;
+	while (*p) {		/* strip build path */
+		if (*p == '/') {
+			fname = p + 1;
+		}
+		p++;
+	}
+
+	for (file = *current; file; file = file->next) {
+		if (!strcmp(file->name, fname) && file->flags == IFS_FILE) {
+			break;
+		}
+	}
+	if (!file) {
+		printf("creating file \"%s\"\n", fname);
+		file = calloc(1, sizeof(ifs_entry));
+		file->flags = IFS_FILE;
+		if (!strcmp(fname, bootstrap)) {
+			file->flags |= IFS_BOOTSTRAP;
+			bootstrap_entry = file;
+		}
+		file->name = strdup(fname);
+		file->realname = strdup(buf);
+		file->size = finfo.st_size;
+		file->next = *current;
+		*current = file;
+	} else {
+		die("error: file \"%s\" already exists\n", fname);
+	}
+}
+
+void build_directory(section *image)
 {
 	command *c;
 	arg *a;
-	ifs_dir *root = 0;
 	char buf[1024];
 
 	fprintf(stderr, "Building image\n");
+
+	current = &root;
 
 	for(c = image->firstc; c; c = c->next) {
 		if (c->nlen == 3 && !strncmp("dir", c->name, 3)) {
@@ -334,20 +464,16 @@ ifs_dir *build_directory(section *image, char *bootfile, char *outfile)
 			}
 			strncpy(buf, a->name, a->nlen);
 			buf[a->nlen] = 0;
-			fprintf(stderr, "adding directory %s\n", buf);
 
-			if (!root)
-				root = new_ifs_dir(buf);
-			else
-				insert_dir(root, buf);
+			add_directory(buf);
 
 			for(a = get_nextarg(a); a; a = get_nextarg(a)) {
 
 				strncpy(buf, a->name, a->nlen);
 				buf[a->nlen] = 0;
-				printf("adding file %s\n", filename);
 
-				insert_file(root, filename);
+				add_file(buf);
+
 			}
 		} else {
 			strncpy(buf, c->name, c->nlen);
@@ -355,14 +481,116 @@ ifs_dir *build_directory(section *image, char *bootfile, char *outfile)
 			fprintf(stderr, "unknown command %s, ignoring\n", buf);
 		}
 	}
-	return root;
+}
+
+int write_files(ifs_entry *r, int outf, int offset)
+{
+	ifs_entry *entry;
+	void *data;
+	int size;
+
+	printf("reading dir\n");
+	for (entry = r; entry; entry = entry->next) {
+		if (entry->flags == IFS_FILE) {
+			printf("writing file %s\n", entry->name);
+
+			size = entry->size;
+			if (!(data = loadfile(entry->realname, &size))) {
+				die("cannot load file\n", NULL);
+			}
+			entry->offset = offset;
+			if ((size = write(outf, data, size)) == -1) {
+				die("error: could not write file: %s\n", strerror(errno));
+			}
+			free(data);
+			offset += size;
+
+		}
+		if (entry->flags == IFS_DIR) {
+			printf("change to directory %s\n", entry->name);
+			offset = write_files(entry->subdirs, outf, offset);
+		}
+	}
+	printf("end of dir\n");
+	return offset;
+}
+
+int write_directories(ifs_entry *r, int outf, int offset)
+{
+	ifs_entry *entry;
+	ifs_inode *inode;
+	int size, len, count = 0, offs = offset;
+	iovec iov[64];
+
+	/*printf("reading dir\n");*/
+	for (entry = r; entry; entry = entry->next) {
+
+		if (entry->flags == IFS_DIR) {
+			printf("change to directory %s\n", entry->name);
+			entry->offset = offs;
+			offs = write_directories(entry->subdirs, outf, offs);
+			entry->size = offs - entry->offset;
+			if (entry->size == 0) {
+				entry->offset = 0;
+			}
+		}
+		printf("adding entry %s, %x, %x, %d\n", entry->name, entry->offset, offs, entry->size);
+		len = strlen(entry->name);
+		size = len + sizeof(ifs_inode);
+		inode = malloc(size);
+		inode->offset = entry->offset;
+		inode->size = entry->size;
+		inode->flags = entry->flags;
+		inode->namelen = len;
+		strncpy((char *)(inode + 1), entry->name, len);
+		iov[count].iov_base = inode;
+		iov[count].iov_len = size;
+		count ++;
+		offs += size;
+	}
+	if (count) {
+		if ((size = writev(outf, iov, count)) == -1) {
+			die("error: could not write file: %s\n", strerror(errno));
+		}
+		offset += size;
+	}
+	/*printf("end of dir\n");*/
+	return offset;
+}
+
+void write_image(char *outfile)
+{
+	int outf, size, bytes;
+	char *data;
+	ifs_entry *entry;
+
+	if ((outf = creat(outfile, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1) {
+		die("cannot write to \"%s\"\n", outfile);
+	}
+
+	size = bootstrap_entry->size;
+	if (!(data = loadfile(bootstrap_entry->realname, &size))) {
+		die("cannot load bootstrap file\n", NULL);
+	}
+
+	if ((bytes = write(outf, data, size)) == -1) {
+		fprintf(stderr, "warning: could not write entire file\n");
+	}
+	free(data);
+
+	bytes = write_files(root, outf, bytes);
+
+	printf("offset of directory: %x\n", bytes);
+
+	bytes = write_directories(root, outf, bytes);
+
+	close(outf);
 }
 
 void mkifs(section *sections, char *outfile)
 {
-	FILE *fp;
 	int i;
-	char file[1024], bootstrap[1024];
+	char file[1024];
 	section *s;
 	command *c;
 	arg *a;
@@ -378,30 +606,30 @@ void mkifs(section *sections, char *outfile)
 	if (!(a = get_arg(c))) {
 		die("argument missing for command >boot\n", NULL);
 	}
-	strncpy(bootstrap, a->name, a->nlen);
-	bootstrap[a->nlen] = 0;
+	bootstrap = strndup(a->name, a->nlen);
 	printf("Bootstrap is \"%s\"\n", bootstrap);
 
 	/* print_sections(sections); */
-
-
-	/*if(!(fp = fopen(outfile,"wb"))){
-		die("cannot write to \"%s\"", outfile);
-	}*/
 
 	if (!(s = find_section(sections, "Image"))) {
 		die("No Image section found\n", NULL);
 	}
 
-	build_directory(s, bootstrap, outfile);
+	build_directory(s);
+
+	if (!bootstrap_entry) {
+		die("error: bootstrap missing\n", NULL);
+	}
 	fprintf(stderr, "writing image\n");
+
+	write_image(outfile);
+
 	fprintf(stderr, "done\n");
-/*	fclose(fp);*/
 }
 
 void usage(char *progname)
 {
-	fprintf(stderr,"usage: %s [ <inifile> ... ] -o <bootfile>\n", progname);
+	fprintf(stderr,"usage: %s [ <inifile> ... -r <searchpath> ] -o <bootfile>\n", progname);
 }
 
 int main(int argc, char **argv)
@@ -419,12 +647,34 @@ int main(int argc, char **argv)
 	argv++;
 	
 	while (argc) {
-		if (!strcmp(*argv,"-o")) {
+		if (!strcmp(*argv, "-o")) {
 			argc--;
 			argv++;
 			if (argc) {
-				file = *argv;
+				if (*argv[0] != '-') {
+					file = *argv;
+				} else {
+					fprintf(stderr, "error: no output specified.\n");
+					usage(progname);
+					return 1;
+				}
 			} else {
+				usage(progname);
+				return 1;
+			}
+		} else if (!strcmp(*argv, "-r")) {
+			argc--;
+			argv++;
+			if (argc) {
+				if (*argv[0] != '-') {
+					searchpath = *argv;
+				} else {
+					fprintf(stderr, "error: option -r requires a path\n");
+					usage(progname);
+					return 1;
+				}
+			} else {
+				fprintf(stderr, "error: option -r requires a path\n");
 				usage(progname);
 				return 1;
 			}

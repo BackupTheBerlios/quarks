@@ -54,7 +54,7 @@ typedef struct {
 	int reserved;				/* currently unused */
 	char name[16];				/* name of image */
 	ifs_inode *root;			/* root directory entry */
-	multiboot_info *minfo;		/* multiboot info */
+	multiboot_info minfo;		/* multiboot info */
 } ifs_superblock;
 
 typedef struct {
