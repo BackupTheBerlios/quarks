@@ -1,8 +1,8 @@
 
-all: BootMaker(TM) 
+all: mkifs 
 
-BootMaker(TM): BootMaker(TM).o
+mkifs: mkifs.o
 	$(CC) -o $@ $<
 
 clean:
-	rm -f BootMaker(TM) *.o
+	rm -f mkifs *.o

@@ -1,14 +1,13 @@
 /*
-	Quarks microkernel
+   Quarks microkernel
 
-	Copyright (C) 2001 Peter Kleinstueck <pkx544@myrealbox.com>
+   Copyright (C) 2001 Peter Kleinstueck <pkx544@myrealbox.com>
 
-	This is free software; you can redistribute it and/or modify
-	it without license.
+   This is free software; you can redistribute it and/or modify
+   it without license.
 
 */
 #include "boot.h"
-#include "bootblock.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -18,12 +17,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-static int make_floppy = 0;
-
 void die(char *s, char *a)
 {
     fprintf(stderr,"error: ");
-    fprintf(stderr,s,a);
+    fprintf(stderr, s, a);
     fprintf(stderr,"\n");
     exit(1);
 }
@@ -34,8 +31,8 @@ void *loadfile(char *file, int *size)
     char *data;
     struct stat info;
     
-    if((fd = open(file,O_RDONLY)) != -1){
-        if(fstat(fd,&info)){
+    if((fd = open(file, O_RDONLY)) != -1){
+        if(fstat(fd, &info)){
             close(fd);
             *size = 0;
             return NULL;
@@ -98,18 +95,16 @@ void print_sections(section *first)
 	}
 }
 
-section *sections = NULL;
-
-#define nUnknown		1
-#define nComment		2
-#define nSection		3
+#define nUnknown	1
+#define nComment	2
+#define nSection	3
 #define nCommand	4
 #define nArgument	5
 
 section *load_ini(char *file)
 {
 	char *d, *end, *sstart;
-	section *s;
+	section *s, *sections = NULL;
 	command *c;
 	arg *a;
 	int line, size, state, argstate;
@@ -181,10 +176,10 @@ section *load_ini(char *file)
 						break;
 					case ']':
 						if (!sections) {		/* first section in list */
-							printf("allocating first section\n");
+							/* printf("allocating first section\n"); */
 							sections = s = malloc(sizeof(section));
 						} else {
-							printf("allocating another section\n");
+							/* printf("allocating another section\n"); */
 							s->next = malloc(sizeof(section));
 							s = s->next;
 						}
@@ -235,10 +230,10 @@ section *load_ini(char *file)
 						line++;
 					case '#':					/* a comment too */
 						if (!c->firsta) {
-							printf("allocating first arg\n");
+							/* printf("allocating first arg\n"); */
 							c->firsta = a = malloc(sizeof(arg));
 						} else {
-							printf("allocating next arg\n");
+							/* printf("allocating next arg\n"); */
 							a->next = malloc(sizeof(arg));
 							a = a->next;
 						}
@@ -312,125 +307,100 @@ arg *get_nextarg(arg *a)
 	return a->next;
 }
 
-/* Builds a directory structure out of an [Image] section */
-dir *build_directory(section *is)
-{
-	dir *image;
-
-	c = find_command(is, "dir");
-	
-}	
-
-void makeboot(section *s, char *outfile)
+void mkifs(section *sections, char *outfile)
 {
 	FILE *fp;
-	int i, c = 0;
-	char *file, *tcb;
-	section *bootstrap;
-	int bootstrapsize;
-	char *bootstrapdata;
-	int rawsize[64];
-	char *rawdata[64];
-	int blocks;
+	int i;
+	char file[1024], bootstrap[1024];
+	section *s;
+	command *c;
+	arg *a;
 
-	memset(rawsize, 0, sizeof(rawsize));
-	memset(rawdata, 0, sizeof(rawdata));
-
-	if (!(bootstrap = find_section(s, "Bootstrap"))) {
-		die("No bootstrap section found\n", NULL);
+	if (!(s = find_section(sections, "Startup"))) {
+		die("No Startup section found\n", NULL);
 	}
 
-	fprintf(stderr, "Processing section [Bootstrap]\n");
-/*	if (!(file = getval(bootstrap, "boot"))) {
-		die("bootstrap file not specified\n", NULL);
+	fprintf(stderr, "Processing section [Startup]\n");
+	if (!(c = find_command(s, "boot"))) {
+		die("Please specify a >boot command in the [Startup] section\n", NULL);
 	}
+	if (!(a = get_arg(c))) {
+		die("argument missing for command <boot\n", NULL);
+	}
+	strncpy(bootstrap, a->name, a->nlen);
+	bootstrap[a->nlen] = 0;
+	printf("Bootstrap is \"%s\"\n", bootstrap);
 
-	if (!(bootstrapdata = loadfile(file, &bootstrapsize))) {
-		die("cannot load \"%s\"", file);
-	}*/
-
-	print_sections(sections);
+	/* print_sections(sections); */
 
 
 /*	if(!(fp = fopen(outfile,"wb"))){
 		die("cannot write to \"%s\"", outfile);
-	}
-
-	if(make_floppy) {
-		fprintf(stderr, "writing bootblock\n");*/
-
-		/* at location 2 is a uint16, set to number of sectors to read */
-/*		blocks = (bootstrapsize + 511) / 512;
-		bootblock[2] = (blocks & 0x00FF);
-		bootblock[3] = (blocks & 0xFF00) >> 8;
-
-		fwrite(bootblock, sizeof(bootblock), 1, fp);
-    }*/
-    
-	fprintf(stderr, "writing bootstrap\n");
-/*	fwrite(bootstrapdata, bootstrapsize, 1, fp);*/
+	}*/
 
 	fprintf(stderr, "writing directory\n");
-/*	fwrite(bdir, sizeof(bdir), 1, fp);*/
+/*	fwrite(bdir, sizeof(bdir), 1, fp);
 
 	for (i = 0; i < c; i ++) {
 		fprintf(stderr, "writing file %i\n");
 		fwrite(rawdata[i], rawsize[i], 1, fp);
-	}
+	}*/
 	fprintf(stderr, "done\n");
 /*	fclose(fp);*/
+}
+
+void usage(char *progname)
+{
+	fprintf(stderr,"usage: %s [ <inifile> ... ] -o <bootfile>\n", progname);
 }
 
 int main(int argc, char **argv)
 {
 	char *file = NULL;
-    section *s;
-    
-    if(argc < 2){
-usage:
-        fprintf(stderr,"usage: %s [ --floppy | -f ] [ <inifile> ... ] -o <bootfile>\n",argv[0]);
+	char *progname = argv[0];
+	section *sections;
+
+	if (argc < 2) {
+		usage(progname);
         return 1;
     }
 
 	argc--;
 	argv++;
 	
-	while(argc){
-		if(!strcmp(*argv,"--floppy")){
-			make_floppy = 1;
-		} else if(!strcmp(*argv,"-o")){
+	while (argc) {
+		if (!strcmp(*argv,"-o")) {
 			argc--;
 			argv++;
-			if(argc){
+			if (argc) {
 				file = *argv;
 			} else {
-				goto usage;
+				usage(progname);
+				return 1;
 			}
 		} else {
-			if(load_ini(*argv) == NULL){
+			if ((sections = load_ini(*argv)) == NULL){
 				fprintf(stderr,"warning: cannot load '%s'\n",*argv);
 			}
 		}
 		argc--;
 		argv++;
 	}
-	
-	
-    if((argc > 3) && !strcmp(argv[3],"-floppy")){
-        make_floppy = 1;
-    }
 
-	if(!file){
-		fprintf(stderr,"error: no output specified\n");
-		goto usage;
+
+	if (!file) {
+		fprintf(stderr, "error: no output specified\n");
+		usage(progname);
+		return 1;
 	}
 	
-	if(!sections){
-		fprintf(stderr,"error: no data to write?!\n");
-		goto usage;
+	if (!sections) {
+		fprintf(stderr, "error: no data to write?!\n");
+		usage(progname);
+		return 1;
 	}
 	
-	makeboot(sections,file);
+	mkifs(sections, file);
     
     return 0;    
 }

@@ -1,5 +1,5 @@
 
 topdir	= .
-subdirs	= lib kernel boot/$(arch)
+subdirs	= lib kernel boot/$(arch) util
 
 include $(topdir)/Makerules

@@ -13,20 +13,20 @@
 typedef struct {
 	int	offset;					/* offset of file relative to the start of image */
 	int	size;					/* size of file */
-	int	mode : 16;			/* mode in usual unix manner */
+	int	mode : 16;				/* mode in usual unix manner */
 	int flags : 8;				/* flags */
 	int namelen : 8;			/* length of name string */
-} sbbb_inode;					/* name follows the inode immediately */
+} ifs_inode;					/* name follows the inode immediately */
 
-#define SBBB_MAGIC		0x38de7a19
+#define IFS_MAGIC		0x38de7a19
 
 typedef struct {
-	int magic;					/* */
+	int magic;					/* magic number */
 	int flags;					/* currently unused */
 	int reserved;				/* currently unused */
-	char name[16];			/* name of image */
-	struct sbbb_inode *root;	/* root directory entry */
-} sbbb_superblock;
+	char name[16];				/* name of image */
+	ifs_inode *root;			/* root directory entry */
+} ifs_superblock;
 
 #endif /* BOOT_H */
 
